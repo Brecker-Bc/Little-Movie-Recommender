@@ -1,0 +1,18 @@
+#virtural environments 
+venv/
+.env/
+.venv/
+
+
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+
+
+# Data files
+data/*.csv
+*.csv
+
+# VS Code settings
+.vscode/
