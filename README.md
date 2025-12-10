@@ -1,14 +1,16 @@
-🎬 Hybrid Movie Recommender System
+Hybrid Movie Recommender System
 
-A fully interactive movie recommendation platform built with Flask, PostgreSQL, and pandas.
-It blends collaborative filtering with real-time preference scoring to deliver flexible, personalized recommendations through a clean web interface.
+A fully interactive movie recommendation built with Flask, PostgreSQL, and pandas.
 
-🔧 Key Features
-✔ Hybrid Recommendation Engine
+filters with real-time preference scoring and past movie rating history 
+
+Key Features
+Hybrid Recommendation Engine
 
 The system merges two scoring strategies:
 
-History score
+* History score
+
 Identifies movies similar to ones the user has rated highly.
 
 Preference score
@@ -16,21 +18,21 @@ Responds to choices made in the UI, including genres, release eras, popularity r
 
 A user-controlled slider combines them into a final weighted score.
 
-✔ Automatic User Profiles
+* Automatic User Profiles
 
 Each device is treated as a unique user.
 All ratings are stored in PostgreSQL and immediately influence future recommendations.
 
-✔ Interactive Rating UI
+* Interactive Rating UI
 
 Movie cards include 1 to 5 star rating buttons.
 Rating a film removes it from future suggestion pools and updates collaborative filtering results on the fly.
 
-✔ Responsive Front End
+* Responsive Front End
 
 A Bootstrap layout renders movie cards with metadata, genres, and optional poster images pulled from the TMDB API.
 
-✔ Rich PostgreSQL-Backed Dataset
+* PostgreSQL-Backed Dataset
 
 The system enriches the MovieLens dataset with:
 
@@ -40,17 +42,8 @@ rating counts and averages
 
 optional TMDB metadata for posters and popularity
 
-✔ Foreign-Film Controls
 
-Users can filter by:
-
-all films
-
-English-only
-
-foreign-language only
-
-🧠 How the Hybrid Score Works
+* How the Hybrid Score Works
 
 Each unrated movie receives two normalized scores:
 
@@ -64,10 +57,9 @@ final_score = α * pref_norm + (1 − α) * history_norm
 
 
 Adjusting α shifts recommendations between
-“movies similar to my history” and
-“movies that fit my preferences right now.”
+“movies similar to my history” and “movies that fit my preferences right now.”
 
-📦 Tech Stack
+* Tech Stack
 
 Python
 
