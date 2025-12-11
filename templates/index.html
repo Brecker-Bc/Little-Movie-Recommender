@@ -115,7 +115,7 @@
               <div class="mb-3">
                 <label class="form-label">Genres</label>
                 <div class="form-check">
-                  {% for g in ["Action","Comedy","Drama","Horror","Romance","Sci fi","Animation"] %}
+                  {% for g in ["Action","Comedy","Drama","Horror","Romance","Sci fi"] %}
                     <div>
                       <input
                         class="form-check-input"
@@ -148,12 +148,23 @@
                   <option value="hidden" {% if default_pop_choice == "hidden" %}selected{% endif %}>Hidden gems</option>
                 </select>
               </div>
+
+              <!-- New animation selector replaces foreign films -->
               <div class="mb-3">
-                <label class="form-label">Foreign films</label>
-                <select name="foreign_choice" class="form-select">
-                  <option value="any"   {% if default_foreign_choice == 'any' %}selected{% endif %}>Include all</option>
-                  <option value="exclude" {% if default_foreign_choice == 'exclude' %}selected{% endif %}>Exclude foreign films</option>
-                  <option value="only" {% if default_foreign_choice == 'only' %}selected{% endif %}>Only foreign films</option>
+                <label class="form-label">Animation filter</label>
+                <select name="animation_choice" class="form-select">
+                  <option value="mix"
+                          {% if default_animation_choice == "mix" %}selected{% endif %}>
+                    Mix animation and live action
+                  </option>
+                  <option value="no_animation"
+                          {% if default_animation_choice == "no_animation" %}selected{% endif %}>
+                    No animation
+                  </option>
+                  <option value="only_animation"
+                          {% if default_animation_choice == "only_animation" %}selected{% endif %}>
+                    Only animation
+                  </option>
                 </select>
               </div>
 

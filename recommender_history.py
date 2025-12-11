@@ -26,6 +26,7 @@ def _build_local_matrix(
     engine,
     params=(user_id,),   # single-element tuple
     )
+    
     if user_ratings.empty:
         raise ValueError(f"user_id {user_id} has no ratings")
 

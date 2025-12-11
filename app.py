@@ -10,10 +10,6 @@ from sqlalchemy import create_engine, text
 from recommender_history import recommend_from_history
 from recommender_prefs import score_by_preferences
 
-# -------------------------------------------------------------------
-# Env and DB setup
-# -------------------------------------------------------------------
-
 load_dotenv()
 TMDB_API_KEY = os.getenv("TMDB_API_KEY")
 engine = create_engine(
@@ -22,7 +18,6 @@ engine = create_engine(
 
 app = Flask(__name__)
 
-# Local "owner" of this app
 MY_USER_ID = int(os.getenv("LOCAL_USER_ID", "9999999"))
 
 
@@ -41,9 +36,7 @@ def ensure_local_user():
 
 ensure_local_user()
 
-# -------------------------------------------------------------------
-# Helpers
-# -------------------------------------------------------------------
+
 
 def min_max_normalize(series: pd.Series) -> pd.Series:
     s = series.astype(float)
@@ -74,39 +67,6 @@ def get_poster_url(tmdb_id):
     except Exception:
         return None
 
-
-# cache for TMDB language lookups
-LANG_CACHE = {}
-
-
-def get_original_language(tmdb_id):
-    """Return TMDB original_language (like 'en', 'fr') or None."""
-    if not TMDB_API_KEY or pd.isna(tmdb_id):
-        return None
-    try:
-        tmdb_id_int = int(tmdb_id)
-    except (TypeError, ValueError):
-        return None
-
-    if tmdb_id_int in LANG_CACHE:
-        return LANG_CACHE[tmdb_id_int]
-
-    try:
-        resp = requests.get(
-            f"https://api.themoviedb.org/3/movie/{tmdb_id_int}",
-            params={"api_key": TMDB_API_KEY},
-            timeout=3,
-        )
-        if resp.status_code != 200:
-            return None
-        data = resp.json()
-        lang = data.get("original_language")
-        LANG_CACHE[tmdb_id_int] = lang
-        return lang
-    except Exception:
-        return None
-
-
 def load_candidates():
     df = pd.read_sql("SELECT * FROM movie_features_with_links", engine)
     df = df[df["num_ratings"] >= 10].copy()
@@ -125,9 +85,6 @@ def get_user_rated_movie_ids(user_id: int):
     return {r[0] for r in rows}
 
 
-# -------------------------------------------------------------------
-# Core hybrid recommender
-# -------------------------------------------------------------------
 
 def compute_hybrid_recs(
     user_id,
@@ -135,14 +92,9 @@ def compute_hybrid_recs(
     year_min,
     popularity_pref,
     alpha,
-    foreign_choice,
+    animation_choice,
     top_n=10,
 ):
-    # If no TMDB key, foreign filter cannot work. Treat as "any".
-    effective_foreign_choice = foreign_choice
-    if not TMDB_API_KEY:
-        effective_foreign_choice = "any"
-
     # 1) base candidate pool
     candidates = load_candidates()
 
@@ -153,7 +105,6 @@ def compute_hybrid_recs(
 
     # 2) history based scores, but do NOT decide candidates here
     hist_df = recommend_from_history(user_id, top_n=500)
-    # just keep movie_id and score
     hist_df = hist_df[["movie_id", "score"]].drop_duplicates("movie_id")
 
     # 3) preference based scoring on the candidate set
@@ -177,22 +128,28 @@ def compute_hybrid_recs(
         "popularity_pref": popularity_pref,
     }
 
-    # optional hard filter on genres if any chosen
+    # 3a) optional hard filter on genres
     if genres_chosen:
         cols_used = [genre_map[g] for g in genres_chosen]
         mask = candidates[cols_used].sum(axis=1) > 0
         candidates = candidates[mask].copy()
 
-    # apply preference scoring
+    # 3b) HARD animation selector on the candidate set
+    if animation_choice == "no_animation":
+        candidates = candidates[candidates["is_animation"] == 0].copy()
+    elif animation_choice == "only_animation":
+        candidates = candidates[candidates["is_animation"] == 1].copy()
+
+    # 4) apply preference scoring
     candidates["pref_score"] = score_by_preferences(candidates, prefs)
 
-    # 4) join history scores onto the candidates
+    # 5) join history scores onto the candidates
     merged = candidates.merge(hist_df, on="movie_id", how="left")
     merged["history_score"] = merged["score"].fillna(0.0)
     if "score" in merged.columns:
         merged.drop(columns=["score"], inplace=True)
 
-    # 5) normalize and combine
+    # 6) normalize and combine
     merged["history_norm"] = min_max_normalize(merged["history_score"])
     merged["pref_norm"] = min_max_normalize(merged["pref_score"])
 
@@ -200,35 +157,13 @@ def compute_hybrid_recs(
         alpha * merged["pref_norm"] + (1.0 - alpha) * merged["history_norm"]
     )
 
-    # drop stuff with non positive final score
     merged = merged[merged["final_score"] > 0]
-
-    # 6) foreign filter using TMDB language
-    if effective_foreign_choice in ("exclude", "only"):
-        langs = []
-        for _, row in merged.iterrows():
-            langs.append(get_original_language(row.get("tmdb_id")))
-        merged["original_language"] = langs
-
-        # if we failed to fetch any languages, skip foreign filtering
-        if merged["original_language"].notna().sum() > 0:
-            if effective_foreign_choice == "exclude":
-                merged = merged[
-                    merged["original_language"].isna()
-                    | (merged["original_language"] == "en")
-                ]
-            else:  # "only"
-                merged = merged[
-                    merged["original_language"].notna()
-                    & (merged["original_language"] != "en")
-                ]
 
     # 7) hidden gems vs normal popularity
     if popularity_pref == "hidden":
-        hidden_threshold = 5000  # tweak if you want
+        hidden_threshold = 5000
 
         merged = merged.sort_values("final_score", ascending=False)
-
         hidden = merged[merged["num_ratings"] < hidden_threshold]
 
         if len(hidden) >= top_n:
@@ -265,9 +200,7 @@ def compute_hybrid_recs(
 
     return results
 
-# -------------------------------------------------------------------
-# Routes
-# -------------------------------------------------------------------
+
 
 @app.route("/", methods=["GET", "POST"])
 def index():
@@ -279,7 +212,8 @@ def index():
     default_year_choice = "any"
     default_pop_choice = "mixed"
     default_alpha = 0.4
-    default_foreign_choice = "any"
+    default_animation_choice = "mix"
+
 
     if request.method == "POST":
         try:
@@ -296,7 +230,8 @@ def index():
 
             pop_choice = request.form.get("pop_choice", "mixed")
             alpha = float(request.form.get("alpha", "0.4"))
-            foreign_choice = request.form.get("foreign_choice", "any")
+            animation_choice = request.form.get("animation_choice", "mix")
+
 
             results = compute_hybrid_recs(
                 user_id=user_id,
@@ -304,7 +239,7 @@ def index():
                 year_min=year_min,
                 popularity_pref=pop_choice,
                 alpha=alpha,
-                foreign_choice=foreign_choice,
+                animation_choice=animation_choice,
                 top_n=10,
             )
 
@@ -312,7 +247,9 @@ def index():
             default_year_choice = year_choice
             default_pop_choice = pop_choice
             default_alpha = alpha
-            default_foreign_choice = foreign_choice
+            default_animation_choice = animation_choice
+
+
 
         except Exception as e:
             error = str(e)
@@ -325,7 +262,7 @@ def index():
         default_year_choice=default_year_choice,
         default_pop_choice=default_pop_choice,
         default_alpha=default_alpha,
-        default_foreign_choice=default_foreign_choice,
+        default_animation_choice=default_animation_choice,
     )
 
 
