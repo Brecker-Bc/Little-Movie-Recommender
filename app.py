@@ -223,8 +223,8 @@ def index():
             year_choice = request.form.get("year_choice", "any")
             if year_choice == "after2000":
                 year_min = 2000
-            elif year_choice == "after1980":
-                year_min = 1980
+            elif year_choice == "after1970":
+                year_min = 1970
             else:
                 year_min = 1900
 
